@@ -6,6 +6,37 @@ protocol BluetoothManagerDelegate {
     func didReceiveSubscribe(central: CBCentral, peripheralManager: CBPeripheralManager)
     func didUnsubscribe(central: CBCentral)
     func readyForNextMessage(_ peripheral: CBPeripheralManager)
+
+    /// Every request of one ATT write together: a long write arrives as several, with offsets, and
+    /// is answered once, on its first request. The default hands each to `didReceiveWrite`.
+    func didReceiveWrites(_ peripheral: CBPeripheralManager, requests: [CBATTRequest])
+    func didReceiveSubscribe(central: CBCentral, characteristic: CBCharacteristic, peripheralManager: CBPeripheralManager)
+    func didUnsubscribe(central: CBCentral, characteristic: CBCharacteristic)
+    /// Answers the read, with `respond(to:withResult:)`, and returns true; false leaves it refused.
+    func didReceiveRead(_ peripheral: CBPeripheralManager, request: CBATTRequest) -> Bool
+}
+
+extension BluetoothManagerDelegate {
+    func didReceiveWrites(_ peripheral: CBPeripheralManager, requests: [CBATTRequest]) {
+        for item in requests {
+            guard let value = item.value else {
+                return
+            }
+            didReceiveWrite(peripheral, characteristic: item.characteristic, data: value, request: item)
+        }
+    }
+
+    func didReceiveSubscribe(central: CBCentral, characteristic _: CBCharacteristic, peripheralManager: CBPeripheralManager) {
+        didReceiveSubscribe(central: central, peripheralManager: peripheralManager)
+    }
+
+    func didUnsubscribe(central: CBCentral, characteristic _: CBCharacteristic) {
+        didUnsubscribe(central: central)
+    }
+
+    func didReceiveRead(_: CBPeripheralManager, request _: CBATTRequest) -> Bool {
+        false
+    }
 }
 
 public class PumpBluetoothmanager: NSObject {
@@ -65,7 +96,11 @@ extension PumpBluetoothmanager: CBPeripheralManagerDelegate {
         didSubscribeTo characteristic: CBCharacteristic
     ) {
         logger.debug("Received subscription from \(central) on \(characteristic.uuid.uuidString)")
-        bluetoothManagerDelegate?.didReceiveSubscribe(central: central, peripheralManager: peripheralManager)
+        bluetoothManagerDelegate?.didReceiveSubscribe(
+            central: central,
+            characteristic: characteristic,
+            peripheralManager: peripheralManager
+        )
     }
 
     public func peripheralManager(
@@ -74,7 +109,7 @@ extension PumpBluetoothmanager: CBPeripheralManagerDelegate {
         didUnsubscribeFrom characteristic: CBCharacteristic
     ) {
         logger.debug("Received unsubscription from \(central) on \(characteristic.uuid.uuidString)")
-        bluetoothManagerDelegate?.didUnsubscribe(central: central)
+        bluetoothManagerDelegate?.didUnsubscribe(central: central, characteristic: characteristic)
     }
 
     public func peripheralManagerDidStartAdvertising(_: CBPeripheralManager, error: (any Error)?) {
@@ -82,15 +117,19 @@ extension PumpBluetoothmanager: CBPeripheralManagerDelegate {
     }
 
     public func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveWrite requests: [CBATTRequest]) {
-        for item in requests {
-            guard let value = item.value else {
-                let message = "EMPTY data received - UUID: \(item.characteristic.uuid.uuidString), Service uuid: \(item.characteristic.service?.uuid.uuidString ?? "nil")"
-                logger.warning(message)
-                return
-            }
-
-            bluetoothManagerDelegate?.didReceiveWrite(peripheral, characteristic: item.characteristic, data: value, request: item)
+        for item in requests where item.value == nil {
+            let message = "EMPTY data received - UUID: \(item.characteristic.uuid.uuidString), Service uuid: \(item.characteristic.service?.uuid.uuidString ?? "nil")"
+            logger.warning(message)
         }
+
+        bluetoothManagerDelegate?.didReceiveWrites(peripheral, requests: requests)
+    }
+
+    public func peripheralManager(_ peripheral: CBPeripheralManager, didReceiveRead request: CBATTRequest) {
+        if bluetoothManagerDelegate?.didReceiveRead(peripheral, request: request) == true {
+            return
+        }
+        peripheral.respond(to: request, withResult: .readNotPermitted)
     }
 
     public func peripheralManagerIsReady(toUpdateSubscribers peripheralManager: CBPeripheralManager) {

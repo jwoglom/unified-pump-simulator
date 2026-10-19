@@ -1,50 +1,14 @@
 {
-  "originHash" : "9bcddddc3e8a903f9d8e7ec6b0de51ddedfa2d038cbe3f362d93e8218135d6ea",
-  "pins" : [
+  "originHash": "9bcddddc3e8a903f9d8e7ec6b0de51ddedfa2d038cbe3f362d93e8218135d6ea",
+  "pins": [
     {
-      "identity" : "asn1",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/leif-ibsen/ASN1",
-      "state" : {
-        "revision" : "e38d1b8b43d8b53ffadde9836f34289176bb7a0c",
-        "version" : "2.7.0"
-      }
-    },
-    {
-      "identity" : "bigint",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/leif-ibsen/BigInt",
-      "state" : {
-        "revision" : "7c7b1be2f6714ce03833879b0aab4b20293c0207",
-        "version" : "1.24.0"
-      }
-    },
-    {
-      "identity" : "cmbedtls",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/bastiaanv/CMbedTLS",
-      "state" : {
-        "revision" : "561ca758742c29b15096f6ac6d6a9990c3fb31fa"
-      }
-    },
-    {
-      "identity" : "digest",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/leif-ibsen/Digest",
-      "state" : {
-        "revision" : "95ba89b494aaff5f3cd2933c03b9a890323dbf2c",
-        "version" : "1.13.0"
-      }
-    },
-    {
-      "identity" : "swiftecc",
-      "kind" : "remoteSourceControl",
-      "location" : "https://github.com/leif-ibsen/SwiftECC",
-      "state" : {
-        "revision" : "85c529c9c56b649a8d8edcef60aab3925ab0f69f",
-        "version" : "5.5.0"
+      "identity": "cmbedtls",
+      "kind": "remoteSourceControl",
+      "location": "https://github.com/bastiaanv/CMbedTLS",
+      "state": {
+        "revision": "561ca758742c29b15096f6ac6d6a9990c3fb31fa"
       }
     }
   ],
-  "version" : 3
+  "version": 3
 }
