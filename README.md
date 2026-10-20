@@ -50,8 +50,8 @@ waits for that ("Pairing state: PairStep2"), then advertises. The pairing code i
 Two things CoreBluetooth cannot do, and how the tab stands in for them:
 
 - A peripheral cannot advertise manufacturer data, where TandemKit reads a pump's pairing step. The
-  tab advertises faketandem's name after `SIM` (`SIM Tandem Mobi 123`), which TandemKit takes as a
-  simulator ready for its code.
+  tab advertises faketandem's name with `Simulator` before the serial (`Tandem Mobi Simulator 123`),
+  which TandemKit takes as a simulator ready for its code.
 - A peripheral cannot end a connection. When faketandem drops the link (a fault, or being made
   `NotDiscoverable`), the tab withdraws its services, which fails the phone's next request, and
   publishes them again once faketandem is back.
