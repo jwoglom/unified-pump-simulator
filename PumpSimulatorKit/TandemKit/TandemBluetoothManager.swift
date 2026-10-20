@@ -8,15 +8,11 @@ import Foundation
 final class TandemBluetoothManager {
     static let pumpService = CBUUID(string: "0000FDFB-0000-1000-8000-00805F9B34FB")
 
-    /// `Tandem Mobi 123` is advertised as `Tandem Mobi SIM`. A CoreBluetooth peripheral cannot
+    /// `Tandem Mobi 123` is advertised as `SIM Tandem Mobi 123`. A CoreBluetooth peripheral cannot
     /// advertise manufacturer data, which is where TandemKit reads a pump's pairing step, so TandemKit
-    /// takes a pump named so as a simulator that is ready for its code.
+    /// takes a name starting with `SIM` as a simulator that is ready for its code.
     static func advertisedName(for pumpName: String) -> String {
-        var words = pumpName.split(separator: " ").map(String.init)
-        if let serial = words.last, !serial.isEmpty, serial.allSatisfy(\.isNumber) {
-            words.removeLast()
-        }
-        return (words + ["SIM"]).joined(separator: " ")
+        "SIM \(pumpName)"
     }
 
     enum Status: Equatable {
