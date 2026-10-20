@@ -8,10 +8,16 @@ import Foundation
 final class TandemBluetoothManager {
     static let pumpService = CBUUID(string: "0000FDFB-0000-1000-8000-00805F9B34FB")
 
-    /// Advertised beside the pump service. A CoreBluetooth peripheral cannot advertise manufacturer
-    /// data, which is where TandemKit reads a pump's pairing step, so TandemKit takes this UUID
-    /// (`ServiceUUID.PUMP_SIMULATOR_MARKER` there) as a simulator that is ready for its code.
-    static let simulatorMarkerService = CBUUID(string: "10710BFF-1949-498B-B49B-A26D4CA7973F")
+    /// `Tandem Mobi 123` is advertised as `Tandem Mobi SIM`. A CoreBluetooth peripheral cannot
+    /// advertise manufacturer data, which is where TandemKit reads a pump's pairing step, so TandemKit
+    /// takes a pump named so as a simulator that is ready for its code.
+    static func advertisedName(for pumpName: String) -> String {
+        var words = pumpName.split(separator: " ").map(String.init)
+        if let serial = words.last, !serial.isEmpty, serial.allSatisfy(\.isNumber) {
+            words.removeLast()
+        }
+        return (words + ["SIM"]).joined(separator: " ")
+    }
 
     enum Status: Equatable {
         case stopped
@@ -44,6 +50,7 @@ final class TandemBluetoothManager {
     private var retry: DispatchWorkItem?
 
     private var hello: VirtualGattHello?
+    private var name = ""
     /// What faketandem's readable characteristics (Device Information) hold, by normalized UUID.
     private var cachedValues: [String: Data] = [:]
     private var characteristics: [String: CBMutableCharacteristic] = [:]
@@ -117,6 +124,7 @@ final class TandemBluetoothManager {
         link.close()
 
         hello = link.hello
+        name = Self.advertisedName(for: link.hello.name)
         cachedValues = values
         logger.info("faketandem at \(endpoint.description) is \(link.hello.name) (\(link.hello.pairingState))")
         advertise()
@@ -163,11 +171,11 @@ final class TandemBluetoothManager {
         pumpBluetoothManager.startAdvertising(
             services: buildServices(hello),
             advertisingData: [
-                CBAdvertisementDataLocalNameKey: hello.name,
-                CBAdvertisementDataServiceUUIDsKey: [Self.pumpService, Self.simulatorMarkerService],
+                CBAdvertisementDataLocalNameKey: name,
+                CBAdvertisementDataServiceUUIDsKey: [Self.pumpService],
             ]
         )
-        status = .advertising(name: hello.name)
+        status = .advertising(name: name)
     }
 
     private func buildServices(_ hello: VirtualGattHello) -> [CBMutableService] {
@@ -242,7 +250,7 @@ final class TandemBluetoothManager {
             self.link = link
             linkToken = token
             self.central = central
-            status = .centralConnected(name: link.hello.name)
+            status = .centralConnected(name: name)
             logger.info("Central \(central.identifier) connected; attached to faketandem")
             return true
         } catch {
@@ -293,7 +301,7 @@ final class TandemBluetoothManager {
                 status = .linkLost(reason)
                 dropCentral()
             } else {
-                status = .advertising(name: hello?.name ?? "")
+                status = .advertising(name: name)
             }
         }
     }
@@ -353,7 +361,7 @@ extension TandemBluetoothManager: BluetoothManagerDelegate {
             }
             return
         }
-        logger.info("Advertising as \(hello?.name ?? "?") for faketandem at \(endpoint.description)")
+        logger.info("Advertising as \(name) for faketandem at \(endpoint.description)")
     }
 
     func didReceiveWrite(_: CBPeripheralManager, characteristic _: CBCharacteristic, data _: Data, request _: CBATTRequest) {}
@@ -412,7 +420,7 @@ extension TandemBluetoothManager: BluetoothManagerDelegate {
             if self.subscribed.isEmpty, self.link != nil {
                 self.logger.info("Central \(central.identifier) left; disconnecting from faketandem")
                 self.endLink(disconnect: true)
-                self.status = .advertising(name: self.hello?.name ?? "")
+                self.status = .advertising(name: self.name)
             }
         }
     }
