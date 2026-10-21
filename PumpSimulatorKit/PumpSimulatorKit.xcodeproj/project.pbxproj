@@ -7,8 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		3E27702E3045F42600D332D2 /* SwiftECC in Frameworks */ = {isa = PBXBuildFile; productRef = 3E0000000000000000000004 /* SwiftECC */; };
-		3E27702F3045F42600D332D2 /* BigInt in Frameworks */ = {isa = PBXBuildFile; productRef = 3E0000000000000000000005 /* BigInt */; };
 		3E2770303045F42600D332D2 /* CMbedTLS in Frameworks */ = {isa = PBXBuildFile; productRef = 3E0000000000000000000007 /* CMbedTLS */; };
 /* End PBXBuildFile section */
 
@@ -50,8 +48,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				3E2770303045F42600D332D2 /* CMbedTLS in Frameworks */,
-				3E27702F3045F42600D332D2 /* BigInt in Frameworks */,
-				3E27702E3045F42600D332D2 /* SwiftECC in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -113,8 +109,6 @@
 			);
 			name = PumpSimulatorKit;
 			packageProductDependencies = (
-				3E0000000000000000000004 /* SwiftECC */,
-				3E0000000000000000000005 /* BigInt */,
 				3E0000000000000000000007 /* CMbedTLS */,
 			);
 			productName = PumpSimulatorKit;
@@ -146,8 +140,6 @@
 			mainGroup = 3EE347582EC96143008A07F6;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				3E0000000000000000000002 /* XCRemoteSwiftPackageReference "SwiftECC" */,
-				3E0000000000000000000003 /* XCRemoteSwiftPackageReference "BigInt" */,
 				3E0000000000000000000006 /* XCRemoteSwiftPackageReference "CMbedTLS" */,
 			);
 			preferredProjectObjectVersion = 77;
@@ -399,22 +391,6 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		3E0000000000000000000002 /* XCRemoteSwiftPackageReference "SwiftECC" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/leif-ibsen/SwiftECC";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 5.5.0;
-			};
-		};
-		3E0000000000000000000003 /* XCRemoteSwiftPackageReference "BigInt" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/leif-ibsen/BigInt";
-			requirement = {
-				kind = upToNextMajorVersion;
-				minimumVersion = 1.0.0;
-			};
-		};
 		3E0000000000000000000006 /* XCRemoteSwiftPackageReference "CMbedTLS" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/bastiaanv/CMbedTLS";
@@ -426,16 +402,6 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		3E0000000000000000000004 /* SwiftECC */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 3E0000000000000000000002 /* XCRemoteSwiftPackageReference "SwiftECC" */;
-			productName = SwiftECC;
-		};
-		3E0000000000000000000005 /* BigInt */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = 3E0000000000000000000003 /* XCRemoteSwiftPackageReference "BigInt" */;
-			productName = BigInt;
-		};
 		3E0000000000000000000007 /* CMbedTLS */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 3E0000000000000000000006 /* XCRemoteSwiftPackageReference "CMbedTLS" */;

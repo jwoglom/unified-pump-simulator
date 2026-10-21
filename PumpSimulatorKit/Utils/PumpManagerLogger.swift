@@ -11,11 +11,19 @@ public struct LogLine: Identifiable {
 public class PumpManagerLogger {
     private let logger: Logger
     private static var observers: [LoggerObserver] = []
+    /// Kits log from their Bluetooth, link and worker queues at once.
+    private static let lock = NSLock()
 
     public private(set) static var logLines: [LogLine] = [] {
         didSet {
             observers.forEach { $0.logsUpdated(logLines) }
         }
+    }
+
+    private static func append(_ line: LogLine) {
+        lock.lock()
+        defer { lock.unlock() }
+        logLines.append(line)
     }
 
     init(subsystem: String, category: String) {
@@ -29,7 +37,7 @@ public class PumpManagerLogger {
     func debug(_ message: String, _ file: String = #file, _ function: String = #function, _ line: Int = #line) {
         let (submessage, functionInfo) = formatMessage("DEBUG", file, function, line)
         logger.debug("[\(submessage)] \(functionInfo): \(message, privacy: .public)")
-        PumpManagerLogger.logLines.append(LogLine(
+        PumpManagerLogger.append(LogLine(
             level: "DEBUG",
             message: message,
             submessage: submessage,
@@ -40,7 +48,7 @@ public class PumpManagerLogger {
     func info(_ message: String, _ file: String = #file, _ function: String = #function, _ line: Int = #line) {
         let (submessage, functionInfo) = formatMessage("INFO", file, function, line)
         logger.info("[\(submessage)] \(functionInfo): \(message, privacy: .public)")
-        PumpManagerLogger.logLines.append(LogLine(
+        PumpManagerLogger.append(LogLine(
             level: "INFO",
             message: message,
             submessage: submessage,
@@ -51,7 +59,7 @@ public class PumpManagerLogger {
     func warning(_ message: String, _ file: String = #file, _ function: String = #function, _ line: Int = #line) {
         let (submessage, functionInfo) = formatMessage("WARNING", file, function, line)
         logger.warning("[\(submessage)] \(functionInfo): \(message, privacy: .public)")
-        PumpManagerLogger.logLines.append(LogLine(
+        PumpManagerLogger.append(LogLine(
             level: "WARNING",
             message: message,
             submessage: submessage,
@@ -62,7 +70,7 @@ public class PumpManagerLogger {
     func error(_ message: String, _ file: String = #file, _ function: String = #function, _ line: Int = #line) {
         let (submessage, functionInfo) = formatMessage("ERROR", file, function, line)
         logger.error("[\(submessage)] \(functionInfo): \(message, privacy: .public)")
-        PumpManagerLogger.logLines.append(LogLine(
+        PumpManagerLogger.append(LogLine(
             level: "ERROR",
             message: message,
             submessage: submessage,

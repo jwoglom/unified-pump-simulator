@@ -4,7 +4,7 @@ The MacOS unified pump manager
 ## Supported pumps
 - Dana-i & DanaRS firmware 3 -> [DanaKit](https://github.com/bastiaanv/DanaKit)
 - Medtrum (200u & 300u) -> [MedtrumKit](https://github.com/jbr7rr/MedtrumKit)
-- Tandem Mobi -> [TandemKit](https://github.com/jwoglom/TandemKit)
+- Tandem Mobi -> [TandemKit](https://github.com/jwoglom/TandemKit), through [faketandem](https://github.com/jwoglom/faketandem) (see below)
 - MiniMed Flex -> [FlexKit](https://github.com/bastiaanv/FlexKit)
 
 ## How to get started
@@ -19,3 +19,54 @@ xed ./unified-pump-simulator
 Once XCode has opened, double check the signing & capability settings.
 After that, use the play button to start the application.
 Make sure to give the application the permission for Bluetooth.
+
+## Tandem: faketandem over real Bluetooth
+
+The Tandem tab does not model the pump itself. It puts
+[faketandem](https://github.com/jwoglom/faketandem), the Go emulator that TandemKit's own
+integration tests run against, on the air: the Mac advertises as the pump, and every
+subscription, write and read the phone makes is forwarded over faketandem's virtual GATT link,
+whose notifications come back the same way. Pairing (JPAKE), signed control messages, the history
+log, qualifying events, Control-IQ, alarms, cartridge procedures and faketandem's fault injection all
+work as they do against the emulator directly, and the phone's app runs unchanged.
+
+The tab fetches faketandem itself. When nothing answers at faketandem's API address it downloads
+the newest build for this Mac from faketandem's
+[GitHub Releases](https://github.com/jwoglom/faketandem/releases) (`latest`, which every push to
+faketandem's `main` moves; a single static binary with the web UI built in), checks it against the
+release's `SHA256SUMS`, keeps it under the app's Application Support and runs it with the virtual
+transport. The first start needs the network; afterwards the copy on disk is checked against
+GitHub at each start and used as it is when GitHub cannot be reached. faketandem stops with the
+tab, and with the app however it ends. `FAKETANDEM_RELEASE` in the app's environment pins a build
+(`main-<date>-<sha>`) or a tagged release (`v0.1.0`); `FAKETANDEM_RELEASE=none` leaves starting
+faketandem to you, as does a faketandem already answering when the tab starts, say one run from its
+repository:
+
+```sh
+go run . -transport virtual -q
+```
+
+faketandem listens for the link on `127.0.0.1:8081` and serves its HTTP API and web UI on
+`http://127.0.0.1:8080`, which the tab uses: the status panel polls `/api/state`, the buttons set
+the pairing state, start a bolus or temp basal on the pump, suspend, raise an occlusion and so on,
+and the sliders set the reservoir and battery. Everything else is in faketandem's web UI ("Open
+faketandem web UI"). Other addresses go in the app's environment as `FAKETANDEM_GATT` (`host:port`)
+and `FAKETANDEM_API_URL`, the variables TandemKit's harness reads too; at an address that is not
+this Mac's the tab starts nothing. The app's sandbox allows incoming connections for faketandem's
+listeners, which run under it.
+
+faketandem starts `NotDiscoverable` and refuses connections until a pairing state is set; the tab
+waits for that ("Pairing state: PairStep2"), then advertises. The pairing code is faketandem's
+(`123456` unless changed), shown in the pump notes.
+
+Two things CoreBluetooth cannot do, and how the tab stands in for them:
+
+- A peripheral cannot advertise manufacturer data, where TandemKit reads a pump's pairing step. The
+  tab advertises faketandem's name with `Simulator` before the serial (`Tandem Mobi Simulator 123`),
+  which TandemKit takes as a simulator ready for its code.
+- A peripheral cannot end a connection. When faketandem drops the link (a fault, or being made
+  `NotDiscoverable`), the tab withdraws its services, which fails the phone's next request, and
+  publishes them again once faketandem is back.
+
+The phone's notification size is passed on to faketandem (`PUT /api/transport`), so responses arrive
+in one notification as from a Mobi, rather than in 20-byte fragments.
