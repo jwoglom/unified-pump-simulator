@@ -7,7 +7,8 @@ import SwiftUI
 /// The Tandem tab: a real Bluetooth front end for faketandem, the Tandem pump emulator TandemKit's
 /// own integration tests run against. faketandem holds the pump, its protocol and its history; this
 /// manager puts it on the air (`TandemBluetoothManager`) and shows and drives its state through its
-/// HTTP API (`FaketandemClient`). Run it with `-transport virtual` from the faketandem repository.
+/// HTTP API (`FaketandemClient`). At the default addresses it fetches faketandem's newest release
+/// from GitHub (`FaketandemInstaller`) and runs it (`FaketandemProcess`) unless one already answers.
 public class TandemPumpManager: PumpManagerProtocol {
     public static let identifier: String = "tandemkit"
     public var title: String = "TandemKit"
@@ -84,9 +85,16 @@ public class TandemPumpManager: PumpManagerProtocol {
             }
         } else if let error {
             lines.append("faketandem's API is not reachable (\(error))")
-            lines.append("Start it from the faketandem repository: go run . -transport virtual -q")
+            if installer == nil {
+                lines.append("Start it from the faketandem repository: go run . -transport virtual -q")
+            }
         }
-        lines.append("Override with \(TandemState.gattEnvironmentVariable) and \(TandemState.apiEnvironmentVariable) in the app's environment")
+        if let faketandemStatus = currentFaketandemStatus {
+            lines.append(faketandemStatus)
+        }
+        lines.append(
+            "Override with \(TandemState.gattEnvironmentVariable), \(TandemState.apiEnvironmentVariable) and \(FaketandemRelease.environmentVariable) in the app's environment"
+        )
         return lines.joined(separator: "\n")
     }
 
@@ -170,9 +178,20 @@ public class TandemPumpManager: PumpManagerProtocol {
     private var pollTimer: DispatchSourceTimer?
     private var isRunning = false
 
+    /// nil when faketandem is the developer's to start: another address, or `FAKETANDEM_RELEASE=none`.
+    private let installer: FaketandemInstaller?
+    /// The faketandem the tab started. All on `workQueue`, as is the status.
+    private var faketandem: FaketandemProcess?
+    private var faketandemStatus: String?
+    private var lastLaunch: Date?
+    private var exitsInARow = 0
+    private static let launchRetryInterval: TimeInterval = 10
+    private static let launchExitLimit = 3
+
     public required init(rawValue: StateRawValue, bluetoothManager: PumpBluetoothmanager) {
         state = TandemState(rawValue: rawValue)
         client = Self.makeClient(state)
+        installer = Self.makeInstaller(state)
         bluetooth = TandemBluetoothManager(pumpBluetoothManager: bluetoothManager)
         bluetooth.api = client
         bluetooth.onStatusChange = { [weak self] status in
@@ -223,6 +242,13 @@ public class TandemPumpManager: PumpManagerProtocol {
         pollTimer?.cancel()
         pollTimer = nil
         bluetooth.stop()
+        workQueue.async {
+            self.faketandem?.stop()
+            self.faketandem = nil
+            self.lastLaunch = nil
+            self.exitsInARow = 0
+            self.setFaketandemStatus(nil)
+        }
         logger.info("Tandem simulator has been stopped!")
     }
 
@@ -234,10 +260,42 @@ public class TandemPumpManager: PumpManagerProtocol {
         FaketandemClient(baseURL: URL(string: state.apiURL) ?? FaketandemClient.defaultBaseURL)
     }
 
+    /// The tab starts faketandem only at this Mac's loopback addresses, the defaults; any other
+    /// address is a faketandem run elsewhere.
+    private static func makeInstaller(_ state: TandemState) -> FaketandemInstaller? {
+        guard let release = FaketandemRelease.configured(),
+              let api = URL(string: state.apiURL), isLoopback(api.host),
+              let gatt = VirtualGattEndpoint(state.gattEndpoint), isLoopback(gatt.host)
+        else {
+            return nil
+        }
+        return FaketandemInstaller(release: release)
+    }
+
+    private static func isLoopback(_ host: String?) -> Bool {
+        guard let host else {
+            return false
+        }
+        return host == "localhost" || host == "::1" || host.hasPrefix("127.")
+    }
+
     private func current() -> (snapshot: FaketandemSnapshot?, error: String?, status: TandemBluetoothManager.Status) {
         lock.lock()
         defer { lock.unlock() }
         return (snapshot, snapshotError, bridgeStatus)
+    }
+
+    private var currentFaketandemStatus: String? {
+        lock.lock()
+        defer { lock.unlock() }
+        return faketandemStatus
+    }
+
+    private func setFaketandemStatus(_ status: String?) {
+        lock.lock()
+        faketandemStatus = status
+        lock.unlock()
+        notifyStateDidUpdate()
     }
 
     // MARK: - faketandem's state
@@ -267,6 +325,7 @@ public class TandemPumpManager: PumpManagerProtocol {
             self.snapshot = snapshot
             snapshotError = nil
             lock.unlock()
+            faketandemIsReachable()
         } catch {
             lock.lock()
             let wasReachable = snapshotError == nil
@@ -276,8 +335,70 @@ public class TandemPumpManager: PumpManagerProtocol {
             if wasReachable {
                 logger.warning("faketandem's API at \(state.apiURL) is not reachable: \(error)")
             }
+            launchFaketandemIfNeeded()
         }
         notifyStateDidUpdate()
+    }
+
+    // MARK: - faketandem itself
+
+    private func faketandemIsReachable() {
+        exitsInARow = 0
+        let someoneElses = "Using the faketandem already running at \(state.apiURL)"
+        if installer != nil, faketandem == nil, currentFaketandemStatus != someoneElses {
+            setFaketandemStatus(someoneElses)
+        }
+    }
+
+    /// Fetches and starts faketandem while nothing answers at the API address: once per
+    /// `launchRetryInterval`, and not after `launchExitLimit` exits in a row, which the log explains.
+    private func launchFaketandemIfNeeded() {
+        guard isRunning, let installer, faketandem == nil, exitsInARow < Self.launchExitLimit else {
+            return
+        }
+        if let lastLaunch, Date().timeIntervalSince(lastLaunch) < Self.launchRetryInterval {
+            return
+        }
+        lastLaunch = Date()
+        do {
+            let binary = try installer.install { [weak self] step in
+                self?.setFaketandemStatus(step.prefix(1).uppercased() + step.dropFirst())
+            }
+            let version = FaketandemProcess.version(of: binary) ?? installer.release.tag
+            let process = FaketandemProcess(binary: binary, apiAddress: apiAddress, gattAddress: state.gattEndpoint, logger: logger)
+            process.onExit = { [weak self, weak process] status in
+                guard let process else {
+                    return
+                }
+                self?.faketandemExited(process, status: status)
+            }
+            try process.start()
+            faketandem = process
+            setFaketandemStatus("Running faketandem \(version), started by the tab")
+        } catch {
+            setFaketandemStatus("Could not start faketandem \(installer.release.tag): \(error)")
+            logger.error("Could not start faketandem \(installer.release.tag): \(error)")
+        }
+    }
+
+    private func faketandemExited(_ process: FaketandemProcess, status: Int32) {
+        workQueue.async {
+            guard self.faketandem === process else {
+                return
+            }
+            self.faketandem = nil
+            self.exitsInARow += 1
+            if self.exitsInARow < Self.launchExitLimit {
+                self.setFaketandemStatus("faketandem exited with status \(status); starting it again")
+            } else {
+                self.setFaketandemStatus("faketandem exited with status \(status), \(self.exitsInARow) times in a row; see the log, then stop and start the tab")
+            }
+        }
+    }
+
+    /// `host:port` for faketandem's `-api-addr`, from the URL the tab polls.
+    private var apiAddress: String {
+        "\(client.baseURL.host ?? "127.0.0.1"):\(client.baseURL.port ?? 80)"
     }
 
     /// Runs a call against faketandem off the main thread, and shows the result at once.
